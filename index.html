@@ -78,7 +78,7 @@
 
         try {
           // Use your existing SECURITY DEFINER RPC
-          const { data, error } = await supabase.rpc("resolve_emergency_access_token", {
+          const { data, error } = await supabase.rpc("resolve_public_emergency_token", {
             _token: token,
           });
 
