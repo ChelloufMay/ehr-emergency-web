@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Emergency View</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; color: #111; }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 20px; }
+      .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 6px 24px rgba(0,0,0,.08); margin-bottom: 16px; }
+      .muted { color: #666; }
+      .row { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #eee; padding: 10px 0; }
+      .row:first-child { border-top: 0; }
+      .label { font-weight: 700; }
+      .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #eef2ff; }
+      .error { background: #fff1f2; color: #991b1b; padding: 12px; border-radius: 12px; }
+      .btn { display: inline-block; padding: 12px 14px; border-radius: 12px; text-decoration: none; background: #111; color: white; }
+      .btn.secondary { background: #e5e7eb; color: #111; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Emergency View</h1>
+        <div id="status" class="muted">Loading…</div>
+      </div>
+
+      <div id="content"></div>
+    </div>
+
+    <script type="module">
+      import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+      // Replace these with your project values
+      const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
+      const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      const statusEl = document.getElementById("status");
+      const contentEl = document.getElementById("content");
+
+      function getToken() {
+        const url = new URL(window.location.href);
+        return url.searchParams.get("token") || "";
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function listSection(title, items) {
+        if (!Array.isArray(items) || items.length === 0) return "";
+        return `
+          <div class="card">
+            <h2>${escapeHtml(title)}</h2>
+            ${items.map(item => `
+              <div class="row">
+                <div>${escapeHtml(item.allergen_name || item.medication_name || item.condition_name || "Item")}</div>
+                <div class="muted">${escapeHtml(item.severity || item.dosage || item.type || "")}</div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      async function load() {
+        const token = getToken();
+        if (!token) {
+          statusEl.innerHTML = `<div class="error">Missing token in QR link.</div>`;
+          return;
+        }
+
+        try {
+          // Use your existing SECURITY DEFINER RPC
+          const { data, error } = await supabase.rpc("resolve_emergency_access_token", {
+            _token: token,
+          });
+
+          if (error) throw error;
+
+          const row = Array.isArray(data) ? data[0] : data;
+          if (!row || typeof row !== "object") {
+            statusEl.innerHTML = `<div class="error">Invalid or expired emergency token.</div>`;
+            return;
+          }
+
+          const p = row;
+
+          statusEl.innerHTML = `
+            <div class="pill">Token resolved</div>
+            <div class="muted" style="margin-top:8px;">Emergency information loaded from Supabase.</div>
+          `;
+
+          contentEl.innerHTML = `
+            <div class="card">
+              <h2>${escapeHtml(p.first_name || "")} ${escapeHtml(p.family_name || "")}</h2>
+              <div class="row"><div class="label">Date of birth</div><div>${escapeHtml(p.date_of_birth || "")}</div></div>
+              <div class="row"><div class="label">Age</div><div>${escapeHtml(p.age_years ?? "")}</div></div>
+              <div class="row"><div class="label">Blood type</div><div>${escapeHtml(p.blood_type || "")}</div></div>
+              <div class="row"><div class="label">Phone</div><div>${escapeHtml(p.phone || "")}</div></div>
+              <div class="row"><div class="label">Emergency contact</div><div>${escapeHtml(p.emergency_contact_name || "")} ${escapeHtml(p.emergency_contact_phone || "")}</div></div>
+              <div class="row"><div class="label">Insurance</div><div>${escapeHtml(p.insurance_plan || "")}</div></div>
+              <div class="row"><div class="label">COVID vaccine</div><div>${escapeHtml(p.covid_vaccine_type || "")}</div></div>
+              <div class="row"><div class="label">Address</div><div>${escapeHtml([p.address_country, p.address_governorate, p.address_city].filter(Boolean).join(" / "))}</div></div>
+            </div>
+
+            ${listSection("Allergies", p.allergies)}
+            ${listSection("Medications", p.medications)}
+            ${listSection("Chronic conditions", p.chronic_conditions)}
+          `;
+        } catch (e) {
+          statusEl.innerHTML = `<div class="error">Failed to load emergency data.</div>`;
+          contentEl.innerHTML = `<div class="card muted">${escapeHtml(e?.message || e)}</div>`;
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>
