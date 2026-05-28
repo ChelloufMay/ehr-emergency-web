@@ -13,16 +13,25 @@
       .row:first-child { border-top: 0; }
       .label { font-weight: 700; }
       .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #eef2ff; }
-      .error { background: #fff1f2; color: #991b1b; padding: 12px; border-radius: 12px; }
+      .pill-offline { background: #fff7ed; color: #92400e; }
+      .pill-live { background: #ecfdf5; color: #065f46; }
+      .error { background: #fff1f2; color: #991b1b; padding: 16px; border-radius: 12px; }
+      .error h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
+      .error p { margin: 0; font-size: 0.9rem; }
+      .revoked { background: #fff1f2; border: 2px solid #fca5a5; color: #991b1b; padding: 20px; border-radius: 16px; text-align: center; }
+      .revoked h2 { margin: 0 0 8px 0; font-size: 1.3rem; }
+      .revoked p { margin: 0; font-size: 0.95rem; color: #b91c1c; }
       .btn { display: inline-block; padding: 12px 14px; border-radius: 12px; text-decoration: none; background: #111; color: white; }
       .btn.secondary { background: #e5e7eb; color: #111; }
+      .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid #ccc; border-top-color: #555; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
-        <h1>Emergency View</h1>
-        <div id="status" class="muted">Loading…</div>
+        <h1 style="margin: 0 0 8px 0;">Emergency View</h1>
+        <div id="status" class="muted"><span class="spinner"></span>Loading…</div>
       </div>
 
       <div id="content"></div>
@@ -31,239 +40,170 @@
     <script type="module">
       import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-      // Rsupabase values
       const SUPABASE_URL = "https://abrmnhlxwkddvgfperjm.supabase.co";
       const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFicm1uaGx4d2tkZHZnZnBlcmptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMjIzMTgsImV4cCI6MjA5MTg5ODMxOH0.21nGi-hW7vr4kCp0yVL_TgpBRZS5fwMOdrV2Z9sf1MQ";
 
-      const supabase = createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-  );
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const statusEl = document.getElementById("status");
-  const contentEl = document.getElementById("content");
+      const statusEl = document.getElementById("status");
+      const contentEl = document.getElementById("content");
 
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-  }
-
-  function getPayload() {
-    const url = new URL(window.location.href);
-    return url.searchParams.get("payload") || "";
-  }
-
-  function getToken() {
-    const url = new URL(window.location.href);
-    return url.searchParams.get("token") || "";
-  }
-
-  function decodePayload(payload) {
-    try {
-      const decoded = decodeURIComponent(payload);
-
-      // First try plain JSON
-      try {
-        return JSON.parse(decoded);
-      } catch (_) {}
-
-      // Then try base64 JSON
-      try {
-        const json = atob(decoded);
-        return JSON.parse(json);
-      } catch (_) {}
-
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function listSection(title, items) {
-    if (!Array.isArray(items) || items.length === 0) {
-      return "";
-    }
-
-    return `
-      <div class="card">
-        <h2>${escapeHtml(title)}</h2>
-
-        ${items.map(item => `
-          <div class="row">
-            <div>
-              ${escapeHtml(
-                item.allergen_name ||
-                item.medication_name ||
-                item.condition_name ||
-                "Item"
-              )}
-            </div>
-
-            <div class="muted">
-              ${escapeHtml(
-                item.severity ||
-                item.dosage ||
-                item.type ||
-                item.frequency ||
-                ""
-              )}
-            </div>
-          </div>
-        `).join("")}
-      </div>
-    `;
-  }
-
-  function renderPatient(data, live) {
-    statusEl.innerHTML = `
-      <div class="pill">
-        ${live ? "Live emergency data" : "Offline emergency snapshot"}
-      </div>
-    `;
-
-    contentEl.innerHTML = `
-      <div class="card">
-        <h2>
-          ${escapeHtml(data.first_name || "")}
-          ${escapeHtml(data.family_name || "")}
-        </h2>
-
-        <div class="row">
-          <div class="label">Date of birth</div>
-          <div>${escapeHtml(data.date_of_birth || "")}</div>
-        </div>
-
-        <div class="row">
-          <div class="label">Age</div>
-          <div>${escapeHtml(data.age_years ?? "")}</div>
-        </div>
-
-        <div class="row">
-          <div class="label">Blood type</div>
-          <div>${escapeHtml(data.blood_type || "")}</div>
-        </div>
-
-        <div class="row">
-          <div class="label">Phone</div>
-          <div>${escapeHtml(data.phone || "")}</div>
-        </div>
-
-        <div class="row">
-          <div class="label">Emergency contact</div>
-          <div>
-            ${escapeHtml(data.emergency_contact_name || "")}
-            ${escapeHtml(data.emergency_contact_phone || "")}
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="label">Insurance</div>
-          <div>${escapeHtml(data.insurance_plan || "")}</div>
-        </div>
-
-        <div class="row">
-          <div class="label">COVID vaccine</div>
-          <div>${escapeHtml(data.covid_vaccine_type || "")}</div>
-        </div>
-
-        <div class="row">
-          <div class="label">Address</div>
-          <div>
-            ${escapeHtml(
-              [
-                data.address_country,
-                data.address_governorate,
-                data.address_city,
-              ]
-                .filter(Boolean)
-                .join(" / ")
-            )}
-          </div>
-        </div>
-      </div>
-
-      ${listSection("Allergies", data.allergies)}
-      ${listSection("Medications", data.medications)}
-      ${listSection("Chronic conditions", data.chronic_conditions)}
-    `;
-  }
-
-  async function load() {
-    const payload = getPayload();
-    let token = getToken();
-
-    let decodedPayload = null;
-
-    // PAYLOAD PATH
-    if (payload) {
-      decodedPayload = decodePayload(payload);
-
-      if (decodedPayload?.offline_summary) {
-        renderPatient(
-          decodedPayload.offline_summary,
-          false,
-        );
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
       }
 
-      // Extract token from payload
-      if (
-        decodedPayload?.token &&
-        typeof decodedPayload.token === "string"
-      ) {
-        token = decodedPayload.token.trim();
+      function getParam(name) {
+        return new URL(window.location.href).searchParams.get(name) || "";
       }
-    }
 
-    // NO TOKEN AVAILABLE
-    if (!token) {
-      if (!decodedPayload?.offline_summary) {
-        statusEl.innerHTML = `
-          <div class="error">
-            Missing emergency token.
+      function decodePayload(payload) {
+        try {
+          const decoded = decodeURIComponent(payload);
+          try { return JSON.parse(decoded); } catch (_) {}
+          try { return JSON.parse(atob(decoded)); } catch (_) {}
+          return null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function listSection(title, items) {
+        if (!Array.isArray(items) || items.length === 0) return "";
+        return `
+          <div class="card">
+            <h2>${escapeHtml(title)}</h2>
+            ${items.map(item => `
+              <div class="row">
+                <div>${escapeHtml(item.allergen_name || item.medication_name || item.condition_name || "Item")}</div>
+                <div class="muted">${escapeHtml(item.severity || item.dosage || item.type || item.frequency || "")}</div>
+              </div>
+            `).join("")}
           </div>
         `;
       }
 
-      return;
-    }
+      function renderPatient(data, isLive) {
+        statusEl.innerHTML = isLive
+          ? `<span class="pill pill-live">✓ Live emergency data</span>`
+          : `<span class="pill pill-offline">⚠ Offline snapshot — connect to internet for latest data</span>`;
 
-    // LIVE LOOKUP
-    try {
-      const { data, error } = await supabase.rpc(
-        "resolve_public_emergency_token",
-        {
-          _token: token,
-        },
-      );
-
-      if (error) {
-        throw error;
+        contentEl.innerHTML = `
+          <div class="card">
+            <h2>${escapeHtml(data.first_name || "")} ${escapeHtml(data.family_name || "")}</h2>
+            <div class="row"><div class="label">Date of birth</div><div>${escapeHtml(data.date_of_birth || "")}</div></div>
+            <div class="row"><div class="label">Age</div><div>${escapeHtml(data.age_years ?? "")}</div></div>
+            <div class="row"><div class="label">Blood type</div><div>${escapeHtml(data.blood_type || "")}</div></div>
+            <div class="row"><div class="label">Phone</div><div>${escapeHtml(data.phone || "")}</div></div>
+            <div class="row">
+              <div class="label">Emergency contact</div>
+              <div>${escapeHtml(data.emergency_contact_name || "")} ${escapeHtml(data.emergency_contact_phone || "")}</div>
+            </div>
+            <div class="row"><div class="label">Insurance</div><div>${escapeHtml(data.insurance_plan || "")}</div></div>
+            <div class="row"><div class="label">COVID vaccine</div><div>${escapeHtml(data.covid_vaccine_type || "")}</div></div>
+            <div class="row">
+              <div class="label">Address</div>
+              <div>${escapeHtml([data.address_country, data.address_governorate, data.address_city].filter(Boolean).join(" / "))}</div>
+            </div>
+          </div>
+          ${listSection("Allergies", data.allergies)}
+          ${listSection("Medications", data.medications)}
+          ${listSection("Chronic conditions", data.chronic_conditions)}
+        `;
       }
 
-      const row = Array.isArray(data)
-        ? data[0]
-        : data;
-
-      if (row && typeof row === "object") {
-        renderPatient(row, true);
-      }
-    } catch (e) {
-      console.error(e);
-
-      // Keep offline snapshot visible if available.
-      if (!decodedPayload?.offline_summary) {
-        statusEl.innerHTML = `
-          <div class="error">
-            Unable to load emergency data.
+      /**
+       * Renders an "access revoked / expired" screen.
+       * Called when the server explicitly returns no rows for a known token meaning the patient has revoked or expired this QR code.
+       */
+      function renderRevoked() {
+        statusEl.innerHTML = `<span class="pill" style="background:#fee2e2;color:#991b1b;">⛔ Access denied</span>`;
+        contentEl.innerHTML = `
+          <div class="revoked">
+            <h2>⛔ This QR code is no longer active</h2>
+            <p>The patient has revoked or expired this emergency token.<br>
+            Please request a new QR code from the patient.</p>
           </div>
         `;
       }
-    }
-  }
 
-  load();
-</script>
+      async function load() {
+        const payload = getParam("payload");
+        let token    = getParam("token");
+
+        let decodedPayload    = null;
+        let hasOfflineSnapshot = false;
+
+        //  Decode QR payload 
+        if (payload) {
+          decodedPayload = decodePayload(payload);
+
+          // Extract token embedded in payload JSON
+          if (decodedPayload?.token && typeof decodedPayload.token === "string") {
+            token = decodedPayload.token.trim();
+          }
+
+          // Check if there is an offline snapshot we could show
+          if (decodedPayload?.offline_summary) {
+            hasOfflineSnapshot = true;
+          }
+        }
+
+        //  2. No token at all 
+        if (!token) {
+          if (hasOfflineSnapshot) {
+            // Only an offline snapshot and no token show it 
+            renderPatient(decodedPayload.offline_summary, false);
+          } else {
+            statusEl.innerHTML = `<div class="error"><h2>Missing emergency token</h2><p>This QR code is invalid or incomplete.</p></div>`;
+          }
+          return;
+        }
+
+        //  3. Live lookup 
+        // Show a loading indicator while we wait for the server.
+        statusEl.innerHTML = `<span class="muted"><span class="spinner"></span>Verifying token…</span>`;
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "resolve_public_emergency_token",
+            { _token: token }
+          );
+
+          // If Supabase threw a hard error (network, auth, etc.), fall through to catch.
+          if (error) throw error;
+
+          const row = Array.isArray(data) ? data[0] : data;
+
+          if (row && typeof row === "object") {
+            // Token is valid and active: show live data
+            renderPatient(row, true);
+          } else {
+            // Server responded successfully but returned NO rows.
+            // This means the token EXISTS but is revoked or expired.
+            // We MUST NOT fall back to the offline snapshot here: the patient deliberately disabled this QR code.
+            renderRevoked();
+          }
+
+        } catch (networkErr) {
+          // The call itself failed (no internet, server down, etc.).
+          // In this case it is safe to fall back to the offline snapshot
+          console.warn("Live lookup failed (network/server error):", networkErr);
+
+          if (hasOfflineSnapshot) {
+            renderPatient(decodedPayload.offline_summary, false);
+          } else {
+            statusEl.innerHTML = `<div class="error"><h2>Unable to load emergency data</h2><p>No internet connection and no offline snapshot available.</p></div>`;
+            contentEl.innerHTML = "";
+          }
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>
